@@ -1,0 +1,17 @@
+[package]
+name = "vcikit"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "A transport-agnostic MVCI / D-PDU raw-mode (PassThru) layer: the 4-byte CAN-id-prefixed request/response convention and the ComParam plus ComLogicalLink lifecycle between a diagnostic driver and any vehicle communication interface backend (skeleton)"
+license = "Apache-2.0"
+readme = "README.md"
+publish = false # remove once the name is confirmed free: python names.py --crates vcikit
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
