@@ -40,7 +40,9 @@ impl PassThruDevice {
     }
 }
 
-/// The protocol capability value names read from each subkey.
+/// The protocol capability value names read from each subkey. Only the Windows registry path reads
+/// them, so the constant is Windows-only (it would be dead code elsewhere).
+#[cfg(windows)]
 const PROTOCOL_VALUES: &[&str] = &[
     "ISO15765",
     "CAN",
@@ -135,6 +137,10 @@ mod tests {
     #[test]
     #[cfg(not(windows))]
     fn discovery_is_empty_off_windows() {
-        assert!(discover().is_empty());
+        let found = discover();
+        assert!(
+            found.is_empty(),
+            "discovery should be empty off Windows, got {found:?}"
+        );
     }
 }
