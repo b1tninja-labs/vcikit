@@ -124,8 +124,11 @@ impl RawBackend for J2534Backend {
                     detail: consts::status_name(status).unwrap_or("unknown").to_string(),
                 });
             }
-            if msg.is_tx_echo() {
-                continue; // our own transmit loopback, not an ECU reply
+            if msg.is_tx_echo() || msg.is_first_frame_indication() {
+                // The transmit loopback echo, and the zero-length ISO 15765 FirstFrame indication of
+                // a multi-frame reply, are both returned by PassThruReadMsgs but carry no ECU
+                // application data (SAE J2534 §7.2.3). Skip them; the reassembled frame follows.
+                continue;
             }
             let (_id, app) = raw::decode_response(msg.payload())?;
             return Ok(app.to_vec());

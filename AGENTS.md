@@ -41,10 +41,11 @@ member's `-p` gates in a separate job.
 
 - **Protocol wording comes from `primarysource`, never memory.** The raw-mode contract is ISO
   22900-2:2009 (§9.2.6.3.6 request, §11.1.4.18.5 response, Annex A J2534-1 mapping); confirm every
-  citation with the `iso_*` tools and record it in `docs/iso-map.md`. SAE J2534-1 is behind the owner's
-  terms gate (`PRIMARYSOURCE_SAE_ACCEPT_TERMS`), so it is **not** cited clause by clause — the J2534
-  constants are grounded in public J2534-1 knowledge, the recovered native DLL, and ISO 22900-2
-  (`docs/j2534.md`). Do not cite J2534 from memory or present its constants as primary-source-verified.
+  citation with the `iso_*` tools and record it in `docs/iso-map.md`. The J2534 constants are verified
+  clause by clause against SAE J2534 (`sae:j2534-2002`, enabled 2026-11-22) with the `sae_*` tools and
+  recorded in `docs/j2534.md`; that source is a scanned PDF with OCR errors, so confirm each value by
+  its figure and cross-check against the recovered native DLL, and never quote its OCR prose verbatim.
+  Do not cite either standard from memory.
 - **`unsafe` is forbidden in `vcikit` and isolated in `vcikit-j2534`.** New FFI goes in `ffi.rs` under
   its audited `#![allow(unsafe_code)]`, each `unsafe` block with a `// SAFETY:` note; never relax the
   root crate's `forbid` and never widen the member's `deny` beyond that one module.

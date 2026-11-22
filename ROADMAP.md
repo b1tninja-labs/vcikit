@@ -34,8 +34,9 @@ Status:
 
 | Status | Obligation | Anchor | Test |
 |---|---|---|---|
-| [ok] | The J2534-1 v04.04 message model (`PASSTHRU_MSG`, protocol/flag/status constants, tx flags) | `docs/j2534.md`; `src/j2534.rs` | `j2534::iso15765_message_carries_the_payload_and_protocol`; `j2534::tx_flags_pad_and_extended`; `j2534::status_names_cover_the_common_codes` |
+| [ok] | The J2534 message model (`PASSTHRU_MSG`, protocol/flag/status constants, tx flags), each verified clause by clause against SAE J2534 (`sae:j2534-2002`) | `docs/j2534.md`; `src/j2534.rs` | `j2534::iso15765_message_carries_the_payload_and_protocol`; `j2534::tx_flags_pad_and_extended`; `j2534::status_names_cover_the_common_codes` |
 | [ok] | The ISO 15765 flow-control filter triple (mask `FF FF FF FF`, pattern = response id, flow = request id) | `docs/j2534.md`; `src/j2534.rs` | `j2534::flow_control_filter_is_mask_pattern_flow` |
+| [ok] | On receive, skip the TxDone echo and the ISO 15765 FirstFrame indication so a multi-frame reply returns its reassembled data, not the zero-length marker (`sae:j2534-2002§7.2.3`, §8.4 Fig 42) | `src/j2534.rs`; `j2534/src/backend.rs` | `j2534::tx_echo_is_detected_from_rx_status`; `j2534::first_frame_indication_is_detected_and_distinct_from_the_echo` |
 | [ok] | Discover registered pass-through DLLs under `PassThruSupport.04.04` (and `WOW6432Node`); read `FunctionLibrary` and `ISO15765` | `j2534/src/discovery.rs` | `discovery::supports_iso15765_reads_the_capability_value`; `discovery::has_library_requires_a_non_empty_path`; `discovery::discovery_is_empty_off_windows` |
 | [ok] | Load a pass-through DLL and bind the J2534-1 entry points; a bad path is a clear `DllLoad` error | `j2534/src/ffi.rs` | `backend::loading_a_non_dll_path_is_a_dll_load_error` |
 | [ok] | `open_registered` returns `NoDevice` when nothing is registered (every non-Windows platform) | `j2534/src/backend.rs` | `backend::open_registered_reports_no_device_off_windows` |
@@ -53,6 +54,6 @@ Status:
 
 | Status | Obligation | Anchor | Test |
 |---|---|---|---|
-| [no] | Cite SAE J2534-1 clause by clause: the `sae_*` collection is behind the owner's terms gate, so the API is grounded in public J2534-1 knowledge + the recovered native DLL + ISO 22900-2 | `docs/j2534.md` | none |
+| [no] | J2534-2 and RP1210a: no J2534-2 PDF is imported, and RP1210a (named by ISO 22900-2 Annex A) is out of scope — this backend targets J2534-1 ISO 15765 only | `docs/j2534.md` | none |
 | [no] | UDS / GMLAN service semantics and the read-first gate ($3E/$1A only, never $27) — the transport carries caller PDUs; the gate is `gmdiag`'s | `src/backend.rs` (`RawBackend` doc) | none |
 | [no] | ISO-TP segmentation (`isotpkit`), the VCX serial frame codec (`vcxtoolkit`), ODX / non-raw ComParam databases | `PLAN.md` | none |

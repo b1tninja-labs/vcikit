@@ -16,8 +16,9 @@
 > **Architecture (owner, 2026-11-22):** `vcikit` is the VCI abstraction `gmdiag` consumes.
 > `vcxtoolkit` owns the native VCX protocol and will separately host our own J2534 pass-through DLL;
 > `vcikit`'s J2534 backend loads whatever pass-through is *registered* (VXDIAG's today, ours later).
-> `gmdiag` selects the backend. SAE J2534-1 is not in `primarysource`, so the J2534 API is grounded in
-> public J2534-1 knowledge, the recovered native `VCXPT32.dll`, and ISO 22900-2 (`docs/j2534.md`).
+> `gmdiag` selects the backend. The J2534 API is verified against SAE J2534 (`sae:j2534-2002`, enabled
+> 2026-11-22), cross-checked against the recovered native `VCXPT32.dll`, with ISO 22900-2 as the
+> cross-reference (`docs/j2534.md`).
 
 A transport-agnostic model of a vehicle communication interface in **raw mode** — the
 seam between a diagnostic driver (`gmdiag`) and whatever hardware actually reaches the
@@ -91,19 +92,17 @@ It is in `primarysource` (`iso:22900-2@2009`); confirm every citation with the `
 never from memory (workspace rule). ISO 15765-2:2016 (`iso:15765-2@2016`) is the transport the
 firmware runs; ISO 11898 (CAN) the link.
 
-**SAE J2534 exists in `primarysource` but is GATED** (confirmed by the primarysource repo
-owner session 2026-11-22): the document is recorded as `j2534@2002` in the SAE home
-(`D:\reference\sae`, from `D:\Research\volt\sae.j2534.2002.pdf`, sha256 `867444e9…`), but the
-`sae_*` tools are not on `main` — the SAE local collection (commit `44db669`) is on the
-unmerged branch `claude/bt-obd-reference-candidates-cbc1b5`, and it sits behind a terms gate
-that needs the owner's own `PRIMARYSOURCE_SAE_ACCEPT_TERMS`. So J2534 is not citable from the
-`sae_*` tools until the owner decides to merge that branch and accept the SAE terms — the
-owner's call, not a thing to work around. Until then, cite ISO 22900-2:2009 §9.2.6.3.6 (which
-names J2534-1 as the raw mode it was "added to support") and §11.1.4.18.5 ("identical to
-protocol ID CAN in SAE J2534-1"), confirmed present as `iso:22900-2@2009`; it is a faithful
-stand-in. When the SAE collection is enabled, swap the ISO stand-in for direct `sae:j2534@2002`
-citations. No J2534-2 PDF is known to be in the owner's files. Record the clause map in
-`docs/iso-map.md`; never paraphrase either from memory.
+**SAE J2534 is now in `primarysource` and cited directly** (enabled 2026-11-22; terms acknowledged):
+the document is `sae:j2534-2002` (SAE J2534 (2002), Pass-Thru Vehicle Programming). The J2534 backend's
+constants and the `PASSTHRU_MSG` layout are verified against it clause by clause — `docs/j2534.md` is
+the clause map (PASSTHRU_MSG §8.1; protocol IDs §7.2.1.1 Fig 4; TxFlags/RxStatus §8.4 Fig 42/43; filter
+types §7.2.1.1 Fig 11; error codes §9.2.2.1 Fig 47; ISO 15765-4 data format §8.3.2). The SAE source is a
+scanned PDF with OCR errors, so each value is confirmed by its figure and cross-checked against the
+recovered native `VCXPT32.dll`; never quote OCR prose verbatim without re-reading the clause. ISO
+22900-2:2009 (`iso:22900-2@2009`) stays as the **cross-reference** confirming the raw-mode CAN-id
+convention (§9.2.6.3.6, §11.1.4.18.5) and the D-PDU ↔ J2534-1 mapping (Annex A, Table A.1). No J2534-2
+PDF is known to be in the owner's files. Record the clause map in `docs/iso-map.md` and `docs/j2534.md`;
+never paraphrase either from memory.
 
 ## Dependencies and wave
 

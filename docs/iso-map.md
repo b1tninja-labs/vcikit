@@ -11,15 +11,15 @@ Every citation here was confirmed through the `primarysource` `iso_*` tools agai
 | §11.1.4.18.5 *Expected response structure (RawMode/NonRawMode)* | The raw-mode **response** convention: "In RawMode, the expected response shall include the header bytes", and "For ISO 15765, ISO_11898_RAW and SAE J1939, the first 4 bytes will always contain the CAN ID" (Table 70). This is the mirror of §9.2.6.3.6 on the receive side — the part the recovered VCX exchange parsed from byte 0 instead of byte 4. | Confirmed present |
 | Annex A, Table A.1 *Mapping of D-PDU, SAE J2534-1 and RP1210a API functions* | Ties the D-PDU `PDUConnect` / `PDUSetComParam` / `PDUStartComPrimitive` lifecycle to the SAE J2534-1 `PassThruConnect` / `PassThruWriteMsgs` / `PassThruReadMsgs` calls and the RP1210a equivalents. This is why ISO 22900-2 is a faithful stand-in for J2534-1 here. | Confirmed present |
 
-## Why SAE J2534-1 is not cited directly
+## SAE J2534 — now cited directly
 
-The raw-mode contract is also SAE J2534-1's, but that document is **not available** through the
-`primarysource` `sae_*` tools on this machine: the SAE local collection sits behind the owner's
-`PRIMARYSOURCE_SAE_ACCEPT_TERMS` gate on an unmerged branch (confirmed 2026-11-22). So J2534-1 must
-not be cited from memory. ISO 22900-2:2009, which names J2534-1 as the raw mode it "has been added …
-to support" (§9.2.6.3.6) and maps its functions one-to-one (Annex A, Table A.1), is the citable
-stand-in. When the SAE collection is enabled, swap the ISO stand-in for direct `sae:j2534@2002`
-citations.
+SAE J2534 (2002) is now imported into `primarysource` (`sae:j2534-2002`, terms acknowledged
+2026-11-22). The J2534 pass-through backend's constants and the `PASSTHRU_MSG` layout are therefore
+cited **directly** against SAE J2534, clause by clause, in `docs/j2534.md` — the SAE document is the
+pass-through source. ISO 22900-2:2009 stays as the **cross-reference** that independently confirms the
+raw-mode CAN-id convention (§9.2.6.3.6, §11.1.4.18.5) and maps the D-PDU API to SAE J2534-1 one-to-one
+(Annex A, Table A.1); both are kept. The SAE source is a scanned PDF with OCR errors, so each value is
+confirmed by its figure and cross-checked against the recovered native pass-through (`docs/j2534.md`).
 
 ## Transport and link, for reference
 
