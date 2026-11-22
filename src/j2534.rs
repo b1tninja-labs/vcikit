@@ -1,43 +1,62 @@
-//! The platform-independent SAE J2534-1 (v04.04) message model the J2534 backend marshals into a
-//! loaded pass-through DLL.
+//! The platform-independent SAE J2534 message model the J2534 backend marshals into a loaded
+//! pass-through DLL.
 //!
 //! The DLL load and the C-ABI calls are the `vcikit-j2534` member's job (isolated `unsafe`);
 //! everything here is pure byte layout and constants, so it compiles and is tested on any platform.
 //! [`PassThruMsg`] is `#[repr(C)]` and is the exact struct the C API takes by pointer.
 //!
-//! SAE J2534-1 is **not in `primarysource`** — it is behind the owner's terms gate (see
-//! `docs/j2534.md`) — so these constants and the `PASSTHRU_MSG` layout are grounded in public
-//! J2534-1 v04.04 knowledge and cross-checked against the recovered native pass-through
-//! `VCXPT32.dll` (session notes). ISO 22900-2:2009 independently confirms the raw-mode CAN-id
-//! convention and maps D-PDU ↔ J2534-1 one-to-one (Annex A, Table A.1).
+//! Every constant and the `PASSTHRU_MSG` layout are **verified against SAE J2534 (2002)** via
+//! `primarysource` (`sae:j2534-2002`); the clause ref is on each item and the full map is in
+//! `docs/j2534.md`. The SAE source is a scanned PDF with OCR errors, so each value is confirmed by its
+//! figure and cross-checked against the recovered native pass-through `VCXPT32.dll` (session notes).
+//! ISO 22900-2:2009 independently confirms the raw-mode CAN-id convention and maps D-PDU ↔ J2534-1
+//! one-to-one (Annex A, Table A.1).
 
 use crate::link::LinkConfig;
 
-/// SAE J2534-1 v04.04 numeric constants used by the ISO 15765 path.
+/// SAE J2534-1 numeric constants used by the ISO 15765 path.
+///
+/// Every value is verified against SAE J2534 (2002) via `primarysource` `sae:j2534-2002` (clause refs
+/// below); none is from memory. The OCR of the scanned PDF is imperfect, so each value is confirmed by
+/// its figure and cross-checked against the recovered native pass-through `VCXPT32.dll`. See
+/// `docs/j2534.md`.
 pub mod consts {
-    /// `STATUS_NOERROR`: the call succeeded.
+    /// `STATUS_NOERROR`: the call succeeded (`sae:j2534-2002§9.2.2.1`, Figure 47 — error codes).
     pub const STATUS_NOERROR: u32 = 0x00;
-    /// `ERR_BUFFER_EMPTY`: a read timed out with nothing queued (benign; stop or retry).
+    /// `ERR_BUFFER_EMPTY`: a read returned with nothing queued (benign; stop or retry)
+    /// (`sae:j2534-2002§9.2.2.1`, Figure 47).
     pub const ERR_BUFFER_EMPTY: u32 = 0x10;
 
-    /// `ISO15765`: ISO 15765-2 (UDS / GMLAN over CAN) — the diagnostic read protocol id.
+    /// `ISO15765`: ISO 15765-2 (UDS / GMLAN over CAN) — the diagnostic read protocol id
+    /// (`sae:j2534-2002§7.2.1.1`, Figure 4 — Protocol ID Values).
     pub const PROTO_ISO15765: u32 = 6;
-    /// `CAN`: raw CAN, for reference.
+    /// `CAN`: raw CAN, for reference (`sae:j2534-2002§7.2.1.1`, Figure 4).
     pub const PROTO_CAN: u32 = 5;
 
-    /// `ISO15765_FRAME_PAD`: pad single frames to 8 bytes (GM ECUs expect this). A `TxFlags` bit.
+    /// `ISO15765_FRAME_PAD`: pad flow-controlled messages to a full CAN frame (GM ECUs expect this).
+    /// `TxFlags` bit 6 (`sae:j2534-2002§8.4`, Figure 43 — TxFlags).
     pub const ISO15765_FRAME_PAD: u32 = 0x40;
-    /// `CAN_29BIT_ID`: the ids are 29-bit extended. A `TxFlags` / connect-flags bit.
+    /// `CAN_29BIT_ID`: the ids are 29-bit extended. `TxFlags` / connect-flags bit 8
+    /// (`sae:j2534-2002§8.4`, Figure 43; `§7.2.1.1`, Figure 3 — connect Flags).
     pub const CAN_29BIT_ID: u32 = 0x0100;
 
-    /// `FLOW_CONTROL_FILTER`: the filter type ISO 15765 needs to bind a response id to a request id.
+    /// `FLOW_CONTROL_FILTER`: the filter type ISO 15765 needs to bind a response id to a request id
+    /// (`sae:j2534-2002§7.2.1.1`, Figure 11 — Filter Type Values).
     pub const FLOW_CONTROL_FILTER: u32 = 3;
 
-    /// `RxStatus` bit 0: this is the transmit loopback / `TxDone` echo of our own request, not an
-    /// ECU reply, so it is skipped.
+    /// `RxStatus` bit 0 (`TX_MSG_TYPE`): 1 = transmitted, so this is the transmit loopback / `TxDone`
+    /// echo of our own request, not an ECU reply, and is skipped (`sae:j2534-2002§8.4`, Figure 42 —
+    /// RxStatus; a transmission's completion is confirmed through this bit, `§9.2.2.1` Appendix A).
     pub const RX_STATUS_TX_MSG: u32 = 0x01;
 
-    /// The human-readable name of a J2534-1 status code, or `None` if it is not one we name.
+    /// `RxStatus` bit 1 (`ISO15765_FIRST_FRAME`): a zero-length indication that a multi-frame message
+    /// has begun; it carries no application data, so it is skipped and the reassembled frame is read
+    /// next (`sae:j2534-2002§8.4`, Figure 42; `§7.2.3` — `PassThruReadMsgs` returns FirstFrame and
+    /// TxDone indications as messages; `§9.2.2.1` Appendix A/B).
+    pub const RX_STATUS_ISO15765_FIRST_FRAME: u32 = 0x02;
+
+    /// The human-readable name of a J2534-1 status code, or `None` if it is not one we name
+    /// (`sae:j2534-2002§9.2.2.1`, Figure 47).
     #[must_use]
     pub const fn status_name(code: u32) -> Option<&'static str> {
         Some(match code {
@@ -59,12 +78,13 @@ pub mod consts {
     }
 }
 
-/// The maximum `PASSTHRU_MSG.Data` length (J2534-1 v04.04).
+/// The maximum `PASSTHRU_MSG.Data` length (`sae:j2534-2002§8.1`, `Data[4128]`).
 pub const MAX_DATA: usize = 4128;
 
-/// The SAE J2534-1 `PASSTHRU_MSG`, `#[repr(C)]` so it is the exact struct the pass-through DLL takes
-/// by pointer. The backend fills `data[..data_size]`; for ISO 15765 those bytes are the 4-byte CAN
-/// id followed by the application PDU.
+/// The SAE J2534-1 `PASSTHRU_MSG` (`sae:j2534-2002§8.1`), `#[repr(C)]` so it is the exact struct the
+/// pass-through DLL takes by pointer. The backend fills `data[..data_size]`; for ISO 15765 those bytes
+/// are the 4-byte CAN id followed by the application PDU (`sae:j2534-2002§8.3.2` — ISO 15765-4 data
+/// format; `§8.3.1` — CAN data format).
 #[repr(C)]
 #[derive(Clone)]
 pub struct PassThruMsg {
@@ -120,10 +140,20 @@ impl PassThruMsg {
         &self.data[..n]
     }
 
-    /// Whether this received message is the transmit loopback echo of our own request.
+    /// Whether this received message is the transmit loopback echo of our own request
+    /// (`RxStatus` `TX_MSG_TYPE` bit; `sae:j2534-2002§8.4`, Figure 42).
     #[must_use]
     pub const fn is_tx_echo(&self) -> bool {
         self.rx_status & consts::RX_STATUS_TX_MSG != 0
+    }
+
+    /// Whether this received message is the ISO 15765 FirstFrame indication — a zero-length marker
+    /// that a multi-frame reply has begun, carrying no application data. `PassThruReadMsgs` returns it
+    /// as a message (`sae:j2534-2002§7.2.3`), so a reader must skip it and take the reassembled frame
+    /// that follows (`RxStatus` `ISO15765_FIRST_FRAME` bit; `sae:j2534-2002§8.4`, Figure 42).
+    #[must_use]
+    pub const fn is_first_frame_indication(&self) -> bool {
+        self.rx_status & consts::RX_STATUS_ISO15765_FIRST_FRAME != 0
     }
 }
 
@@ -210,6 +240,15 @@ mod tests {
         assert!(!msg.is_tx_echo());
         msg.rx_status = consts::RX_STATUS_TX_MSG;
         assert!(msg.is_tx_echo());
+    }
+
+    #[test]
+    fn first_frame_indication_is_detected_and_distinct_from_the_echo() {
+        let mut msg = PassThruMsg::default();
+        assert!(!msg.is_first_frame_indication());
+        msg.rx_status = consts::RX_STATUS_ISO15765_FIRST_FRAME;
+        assert!(msg.is_first_frame_indication());
+        assert!(!msg.is_tx_echo()); // the FirstFrame indication is not the transmit echo
     }
 
     #[test]
