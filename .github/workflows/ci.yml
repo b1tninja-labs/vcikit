@@ -5,9 +5,11 @@ on:
   pull_request:
 permissions:
   contents: read
+# Windows-only CI: the J2534 device target is Windows, so the suite runs on the real
+# platform rather than Linux (the pure root crate still builds and tests fine there).
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -20,10 +22,10 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
   # The default `check` job builds only the root crate (no `--workspace`), so the J2534 backend
-  # member has its own gate. It is Windows-only in effect but compiles and tests on Ubuntu (the
-  # device paths are `cfg`-gated); the registry read and the DLL FFI need no device to compile.
+  # member has its own gate. It runs on Windows (its real target); the registry read and the DLL
+  # FFI compile without a device attached.
   j2534:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -35,7 +37,7 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
   msrv:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.85
