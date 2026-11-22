@@ -3,10 +3,18 @@ name = "vcikit"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
-description = "A transport-agnostic MVCI / D-PDU raw-mode (PassThru) layer: the 4-byte CAN-id-prefixed request/response convention and the ComParam plus ComLogicalLink lifecycle between a diagnostic driver and any vehicle communication interface backend (skeleton)"
+description = "A transport-agnostic MVCI / D-PDU raw-mode (PassThru) layer: the 4-byte CAN-id-prefixed request/response convention, the link config, and the backend seam between a diagnostic driver and any vehicle communication interface (native-VCX or a registered SAE J2534 pass-through)"
 license = "Apache-2.0"
 readme = "README.md"
 publish = false # remove once the name is confirmed free: python names.py --crates vcikit
+
+# The abstraction crate is this crate alone, and it keeps `unsafe` forbidden. The J2534 backend has
+# to load a registered pass-through DLL and call it over a C ABI, which is unsafe FFI, so it lives in
+# a separate member (`j2534/`, crate `vcikit-j2534`) that isolates the `unsafe` on one audited module
+# instead of relaxing this crate's lint. The default gates (no `--workspace`) build only this crate,
+# which needs no DLL and no Windows; the member has its own `-p vcikit-j2534` gate job in CI.
+[workspace]
+members = ["j2534"]
 
 [lints.rust]
 unsafe_code = "forbid"
@@ -15,3 +23,7 @@ missing_docs = "warn"
 [lints.clippy]
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
+# `ComParam`, `CanId`, `J2534`, `PassThru`, `ISO15765` and the ISO 22900-2 / J2534-1 abbreviations are
+# the standards' own terms; these two pedantic lints only fight that vocabulary.
+module_name_repetitions = "allow"
+doc_markdown = "allow"
