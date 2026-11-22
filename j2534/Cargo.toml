@@ -1,0 +1,32 @@
+[package]
+name = "vcikit-j2534"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "SAE J2534-1 pass-through backend for vcikit: registry discovery of a registered pass-through DLL and the ISO 15765 C-ABI calls, with the unsafe FFI isolated to one module"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+# The abstraction crate: the RawBackend trait, LinkConfig, the raw-mode codec, and the repr(C)
+# PassThruMsg model this backend marshals.
+vcikit = { path = "..", version = "0.1.0" }
+# Loads the registered pass-through DLL and binds its J2534-1 entry points. Cross-platform, so this
+# crate compiles on the Ubuntu CI even though a device is only reachable on Windows.
+libloading = "0.8.6"
+
+# Reading the PassThruSupport.04.04 registry keys is Windows-only; off Windows, discovery is empty.
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52.0"
+
+[lints.rust]
+# Not `forbid`: the DLL load and the C-ABI calls are unsafe FFI. It is denied everywhere and allowed
+# only on the one audited `ffi` module, instead of relaxing the abstraction crate's `forbid`.
+unsafe_code = "deny"
+missing_docs = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+doc_markdown = "allow"

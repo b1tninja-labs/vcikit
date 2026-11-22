@@ -19,9 +19,25 @@ jobs:
       - run: cargo doc --no-deps
         env:
           RUSTDOCFLAGS: -D warnings
+  # The default `check` job builds only the root crate (no `--workspace`), so the J2534 backend
+  # member has its own gate. It is Windows-only in effect but compiles and tests on Ubuntu (the
+  # device paths are `cfg`-gated); the registry read and the DLL FFI need no device to compile.
+  j2534:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - run: cargo clippy -p vcikit-j2534 --all-targets -- -D warnings
+      - run: cargo test -p vcikit-j2534
+      - run: cargo doc -p vcikit-j2534 --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
   msrv:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.85
       - run: cargo test
+      - run: cargo test -p vcikit-j2534

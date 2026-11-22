@@ -1,3 +1,5 @@
 /target
+# Build output of workspace members (e.g. j2534/target) as well as the root.
+target/
 *.log
 *.out

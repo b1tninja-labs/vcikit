@@ -1,13 +1,23 @@
 # vcikit
 
-> **Status (2026-11-22): registered, shelled Rust crate — skeleton only.** The owner promoted
-> `vcikit` from a deferred plan to a registered crate and generated the house Rust shell
-> (`projecthub shells rust new`): `Cargo.toml` (edition 2024, MSRV 1.85, `unsafe` forbidden),
-> `src/lib.rs` (crate identity and this scope, no logic), `ROADMAP.md`, `docs/`, CI, the four gates.
-> The design below is unchanged and still governs scope. **Implementation remains deferred**: the
-> raw-mode PDU codec, the ComParam set, the ComLogicalLink lifecycle and the `Backend` trait are not
-> written, and stay blocked on `vcxtoolkit`'s raw-mode bring-up and triggered by a second backend —
-> see "Trigger for code" below. This section is the only change the promotion made to the design.
+> **Status (2026-11-22): implemented — the J2534 backend is built; the native-VCX backend is the
+> blocked second.** The owner redirected `vcikit` from a skeleton to a working transport abstraction
+> with two backends. **Built:** the `RawBackend` trait and `BackendKind` selector, the `LinkConfig` /
+> `CanId` types (the raw-mode ComParam subset), the 4-byte CAN-id raw-mode PDU codec, the
+> platform-independent J2534 message model, and the **J2534 pass-through backend** (`vcikit-j2534`
+> member) — registry discovery of a DLL under `PassThruSupport.04.04`, loading it, and driving the
+> J2534-1 ISO 15765 API (`Open → Connect → flow-control StartMsgFilter → WriteMsgs/ReadMsgs`). The
+> crate is now a workspace: the abstraction crate keeps `unsafe` forbidden, and the unsafe DLL FFI is
+> isolated to one audited module in the member. **Still blocked:** the **native-VCX** backend over
+> `vcxtoolkit`'s codecs — `BackendKind::NativeVcx` is exposed, but the impl waits on `vcxtoolkit`
+> growing the raw-mode channel bring-up (see "Dependencies and wave"). The design below is unchanged;
+> the "Trigger for code" and "Boundary" sections record what the owner's redirect built.
+>
+> **Architecture (owner, 2026-11-22):** `vcikit` is the VCI abstraction `gmdiag` consumes.
+> `vcxtoolkit` owns the native VCX protocol and will separately host our own J2534 pass-through DLL;
+> `vcikit`'s J2534 backend loads whatever pass-through is *registered* (VXDIAG's today, ours later).
+> `gmdiag` selects the backend. SAE J2534-1 is not in `primarysource`, so the J2534 API is grounded in
+> public J2534-1 knowledge, the recovered native `VCXPT32.dll`, and ISO 22900-2 (`docs/j2534.md`).
 
 A transport-agnostic model of a vehicle communication interface in **raw mode** — the
 seam between a diagnostic driver (`gmdiag`) and whatever hardware actually reaches the
@@ -113,20 +123,20 @@ Tier/wave for PORTFOLIO.md: a refactor-seam crate, sequenced **after** the vcxto
 channel-bring-up lands and **before** a second (J2534) backend is added — its whole
 justification is the second backend, so it may stay a plan until that is actually wanted.
 
-## Trigger for code (when the `Cargo.toml` is created)
+## Trigger for code — met (2026-11-22)
 
-Two independent triggers; either is enough, both are honest:
-1. A **second backend** is genuinely on the table (a J2534 or RP1210 interface the owner can
-   use), so the id-prefix + ComParam logic would otherwise be copied into two dongles; or
-2. `vcxtoolkit`'s raw-mode bring-up and `gmdiag`'s id-prefix fix have both landed and the
-   shared raw-mode logic is demonstrably duplicated between them, so extracting it pays for
-   itself.
+Two independent triggers were named; either was enough:
+1. A **second backend** is genuinely on the table — the owner's redirect makes the J2534 pass-through
+   a real, usable interface (a registered DLL, VXDIAG's today and our own later), so the id-prefix +
+   link-config logic would otherwise be copied into two dongles; and
+2. `vcxtoolkit`'s raw-mode bring-up and `gmdiag`'s id-prefix fix are the duplication this crate
+   extracts.
 
-Until one of those is real, the crate stays a **skeleton**: the directory now carries the house Rust
-shell (registered 2026-11-22), but no `Backend` trait, ComParam set or id-prefix logic is written,
-because a crate implemented now would be a trait with one impl and no second caller — a shell. The
-shell exists so the name, repository and gates are in place; the raw-mode logic lands when a trigger
-above is real.
+Trigger 1 is now real, so the crate is **implemented** (not a skeleton): the `RawBackend` trait, the
+`CanId` / `LinkConfig` types, the 4-byte CAN-id raw-mode codec, the J2534 message model, and the
+**J2534 pass-through backend** are written and tested (`ROADMAP.md`). The second backend justifies the
+abstraction exactly as this section required. The **native-VCX** backend remains the one piece still
+blocked on `vcxtoolkit`'s channel bring-up; it is an exposed `BackendKind` with no impl yet.
 
 ## Name
 
@@ -141,8 +151,11 @@ one keystroke from live *crate/PyPI* names and so cannot release under that spel
 
 ## Boundary
 
-The house Rust shell is built; the raw-mode logic is not. This document, drafted from the VCXPT32.dll
-recovery and the ISO 22900-2 confirmation, defines the scope the crate will fill when a trigger above is
-real. The owner registered the crate and generated the skeleton on 2026-11-22 (`PORTFOLIO.md` §3 and the
-§10 log). Flipping `vcxtoolkit`'s `READ_LAYOUT_RECOVERED`, and implementing the `Backend` / ComParam /
-id-prefix layer, remain the owner's decisions.
+The abstraction and the J2534 backend are built; the native-VCX backend is not. This document, drafted
+from the VCXPT32.dll recovery and the ISO 22900-2 confirmation and extended by the owner's 2026-11-22
+redirect, defines the scope the crate fills. `vcxtoolkit` is not edited from here, and
+`READ_LAYOUT_RECOVERED` is not flipped from here; implementing the native-VCX backend, which needs
+`vcxtoolkit`'s raw-mode channel bring-up, remains the owner's decision. The J2534 backend touches a
+registered pass-through DLL only on a real Windows host; off Windows (the CI) its device paths are
+`cfg`-gated and discovery is empty. The transport stays dumb — the read-first / gated ethos lives in
+`gmdiag`, not here.
