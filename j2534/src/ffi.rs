@@ -39,6 +39,45 @@ pub struct Dll {
     lib: Library,
 }
 
+/// If `path` is a PE DLL whose architecture does not match this process, return a clear
+/// message; otherwise `None`. Reads only the PE header bytes (no `unsafe`, no load).
+///
+/// A 64-bit process cannot load a 32-bit DLL and vice versa — the common failure with the
+/// VXDIAG pass-through, whose DLLs are 32-bit, so a reader must be built `i686`.
+fn bitness_mismatch(path: &Path) -> Option<String> {
+    let bytes = std::fs::read(path).ok()?;
+    // DOS header "MZ", e_lfanew (u32 LE) at 0x3C points to the PE header; the machine
+    // word is a u16 LE at PE+4 (PE\0\0 signature, then the COFF header).
+    if bytes.len() < 0x40 || &bytes[0..2] != b"MZ" {
+        return None;
+    }
+    let pe = u32::from_le_bytes(bytes[0x3C..0x40].try_into().ok()?) as usize;
+    if bytes.len() < pe + 6 || &bytes[pe..pe + 4] != b"PE\0\0" {
+        return None;
+    }
+    let machine = u16::from_le_bytes(bytes[pe + 4..pe + 6].try_into().ok()?);
+    let (dll_bits, dll_arch) = match machine {
+        0x014C => (32, "x86 (32-bit)"),
+        0x8664 => (64, "x64 (64-bit)"),
+        0xAA64 => (64, "ARM64 (64-bit)"),
+        _ => return None,
+    };
+    let proc_bits = if cfg!(target_pointer_width = "64") {
+        64
+    } else {
+        32
+    };
+    if dll_bits == proc_bits {
+        return None;
+    }
+    Some(format!(
+        "{} is {dll_arch}, but this process is {proc_bits}-bit — a {proc_bits}-bit process \
+         cannot load a {dll_bits}-bit DLL. The VXDIAG pass-through DLLs are 32-bit, so run the \
+         32-bit (i686) reader.",
+        path.display()
+    ))
+}
+
 impl Dll {
     /// Load the pass-through DLL at `path` and verify it exports the J2534-1 entry points this
     /// backend uses.
@@ -49,7 +88,17 @@ impl Dll {
     pub fn load(path: &Path) -> Result<Self> {
         // SAFETY: loading a DLL runs its initialisers; `path` is a J2534 pass-through the user has
         // registered. This is the irreducible risk of a pass-through backend.
-        let lib = unsafe { Library::new(path) }.map_err(|e| Error::DllLoad(e.to_string()))?;
+        let lib = match unsafe { Library::new(path) } {
+            Ok(lib) => lib,
+            Err(error) => {
+                // A 32/64-bit mismatch is the most common load failure (the VXDIAG
+                // pass-through DLLs are 32-bit); turn the cryptic OS error into a clear one.
+                if let Some(message) = bitness_mismatch(path) {
+                    return Err(Error::DllLoad(message));
+                }
+                return Err(Error::DllLoad(error.to_string()));
+            }
+        };
         let dll = Self { lib };
         // Fail early and clearly if the DLL is not a J2534 pass-through.
         for symbol in [

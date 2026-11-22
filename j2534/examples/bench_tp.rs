@@ -20,7 +20,10 @@ use vcikit_j2534::J2534Backend;
 fn parse_id(arg: Option<String>, default: u16) -> u16 {
     arg.and_then(|s| {
         let s = s.trim();
-        let s = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")).unwrap_or(s);
+        let s = s
+            .strip_prefix("0x")
+            .or_else(|| s.strip_prefix("0X"))
+            .unwrap_or(s);
         u16::from_str_radix(s, 16).ok()
     })
     .unwrap_or(default)
@@ -31,8 +34,7 @@ fn main() {
     let default_dll = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|d| d.join("VCXPT32.dll")))
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|| "VCXPT32.dll".to_string());
+        .map_or_else(|| "VCXPT32.dll".to_string(), |p| p.display().to_string());
     let dll = args.next().unwrap_or(default_dll);
     let req = parse_id(args.next(), 0x7E0);
     let resp = parse_id(args.next(), 0x7E8);
