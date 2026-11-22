@@ -78,6 +78,56 @@ fn bitness_mismatch(path: &Path) -> Option<String> {
     ))
 }
 
+/// Load the DLL, resolving its dependent DLLs from its own directory.
+///
+/// On Windows this uses `LOAD_WITH_ALTERED_SEARCH_PATH` so a pass-through DLL (e.g.
+/// VXDIAG's `VCXPT32.dll`) finds its sibling DLLs in the same folder regardless of the
+/// process's current directory — the flag needs an absolute path, so the path is
+/// canonicalised first.
+#[cfg(windows)]
+fn load_library(path: &Path) -> std::result::Result<Library, libloading::Error> {
+    use libloading::os::windows::{LOAD_WITH_ALTERED_SEARCH_PATH, Library as WinLibrary};
+    let absolute = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    // Put the DLL's own directory on the process search path BEFORE loading. A pass-through
+    // DLL (VXDIAG's VCXPT32.dll) does its own runtime `LoadLibrary("VCX.DLL")`, which
+    // LOAD_WITH_ALTERED_SEARCH_PATH does not cover (that flag only governs the direct DLL's
+    // static imports). Without the sibling directory on the search path, VCXPT32 fails with
+    // a modal "LoadLibrary(VCX.DLL) ErrorCode = 126" dialog that blocks the process.
+    if let Some(dir) = absolute.parent() {
+        set_dll_directory(dir);
+    }
+    // SAFETY: loading a DLL runs its initialisers; `path` is a J2534 pass-through the caller
+    // chose. The altered search path only changes where its static imports resolve from.
+    let library = unsafe { WinLibrary::load_with_flags(&absolute, LOAD_WITH_ALTERED_SEARCH_PATH) }?;
+    Ok(library.into())
+}
+
+/// Add `dir` to the process DLL search path (`SetDllDirectoryW`), so a loaded DLL's own
+/// runtime `LoadLibrary` calls find their siblings there regardless of the current directory.
+#[cfg(windows)]
+fn set_dll_directory(dir: &Path) {
+    use std::os::windows::ffi::OsStrExt;
+    unsafe extern "system" {
+        fn SetDllDirectoryW(path: *const u16) -> i32;
+    }
+    let wide: Vec<u16> = dir
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    // SAFETY: `wide` is a NUL-terminated UTF-16 path valid for the duration of the call.
+    unsafe {
+        SetDllDirectoryW(wide.as_ptr());
+    }
+}
+
+#[cfg(not(windows))]
+fn load_library(path: &Path) -> std::result::Result<Library, libloading::Error> {
+    // SAFETY: loading a shared object runs its initialisers; this is the irreducible risk of
+    // a pass-through backend.
+    unsafe { Library::new(path) }
+}
+
 impl Dll {
     /// Load the pass-through DLL at `path` and verify it exports the J2534-1 entry points this
     /// backend uses.
@@ -86,9 +136,7 @@ impl Dll {
     ///
     /// Returns [`Error::DllLoad`] if the DLL cannot be loaded or is missing an entry point.
     pub fn load(path: &Path) -> Result<Self> {
-        // SAFETY: loading a DLL runs its initialisers; `path` is a J2534 pass-through the user has
-        // registered. This is the irreducible risk of a pass-through backend.
-        let lib = match unsafe { Library::new(path) } {
+        let lib = match load_library(path) {
             Ok(lib) => lib,
             Err(error) => {
                 // A 32/64-bit mismatch is the most common load failure (the VXDIAG
